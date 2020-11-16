@@ -1,5 +1,5 @@
 # Description ####
-# How we analyzed tomoSeq data for zebrafish 1-cell stage embryos (here:tomo13)
+# How we analyzed tomoSeq data for zebrafish one-cell stage embryos (here:tomo13)
 
 #Versions:
 #R version 3.2.3 (2015-12-10)
@@ -22,9 +22,9 @@
 #[11] stringi_1.2.4      lazyeval_0.2.1     labeling_0.3       RColorBrewer_1.1-2 tools_3.2.3       
 #[16] stringr_1.3.1      munsell_0.5.0      colorspace_1.3-2   tibble_1.3.4      
 
-setwd("~/data/junker/users/Karo/collab_Meyer/count_tables/danio_tomoseq_raw_counts")
+setwd("/your/file/path/danio_tomoseq_raw_counts")
 list.files()
-#The needed files for that script are count tables from the mapping script. I put these count tables in the upon #mentioned folder.
+#The needed files for that script are count tables from the mapping script.
 
 # Parameters ####
 min.transcripts = 8000
@@ -43,36 +43,6 @@ library(gridExtra)
 
 
 # Functions ####
-find.peak <- function(gene.expression, peak.length, cutoff){
-  s = 0
-  peak.found = F
-  for(i in 1:length(gene.expression)){
-    if(gene.expression[i] > cutoff){
-      s = s + 1
-      if(s >= peak.length){
-        peak.found <- T
-      }
-    }else{
-      s <- 0
-    }
-  }
-  return(peak.found)
-}
-
-overseq <- function(x, y, name){
-  os <- as.matrix((x+0.01)/(y+0.01))
-  #os[is.infinite(os)] <- 0
-  #os[is.na(os)] <- 0
-  os.melt <- melt(os)
-  print(
-    ggplot(os.melt, aes(x = value)) + theme_light() +
-      geom_histogram(binwidth = 0.2) +
-      scale_y_log10() +
-      labs(title = paste("sequencing saturation", name),
-           x = "read counts / UMI counts") #+
-      #scale_x_continuous(breaks = 1:35)
-  )  
-}
 
 plot.gene.line <- function(gene.expression){
   plot.title <- paste("Spatial expression of", gene.expression[1])
@@ -173,17 +143,17 @@ plot.short <- function(name, expression.data){
 }
 
 # Load data ####
-#the here mentioned files are concatenated count tables from 2 consequtive sequencing runs. The
-# librariea are from a tomo-seq experiment from 1-cell stage zebrafish embyros
+#the here mentioned files are concatenated count tables from 2 consequtative sequencing runs. The
+# libraries are from a tomo-seq experiment from one-cell stage zebrafish embyros
 
-transcripts.in.tomo13=read.table("~/data/junker/users/Karo/collab_Meyer/count_tables/danio_tomoseq_raw_counts/tomo13_deep.coutt.csv", sep = ",", header = T, stringsAsFactors = F)
+transcripts.in.tomo13=read.table("/your/file/path/tomo13_deep.coutt.csv", sep = ",", header = T, stringsAsFactors = F)
 colnames(transcripts.in.tomo13)[-1]=paste("X", 1:96, sep = "")
 transcripts.tomo13 = transcripts.in.tomo13[!grepl("ERCC", transcripts.in.tomo13$GENEID), ]
-counts.in.tomo13 <- read.table("~/data/junker/users/Karo/collab_Meyer/count_tables/danio_tomoseq_raw_counts/tomo13_deep.coutc.csv", sep = "\t", header = T, stringsAsFactors = F)
+counts.in.tomo13 <- read.table("/your/file/path/tomo13_deep.coutc.csv", sep = "\t", header = T, stringsAsFactors = F)
 counts.tomo13 <- counts.in.tomo13[!grepl("ERCC", counts.in.tomo13$GENEID), ]
-UMIs.in.tomo13 <- read.table("~/data/junker/users/Karo/collab_Meyer/count_tables/danio_tomoseq_raw_counts/tomo13_deep.coutb.csv", sep = "\t", header = T, stringsAsFactors = F)
+UMIs.in.tomo13 <- read.table("/your/file/path/tomo13_deep.coutb.csv", sep = "\t", header = T, stringsAsFactors = F)
 UMIs.tomo13 <- UMIs.in.tomo13[!grepl("ERCC", UMIs.in.tomo13$GENEID), ]
-add.names= read.table("~/data/junker/users/Karo/collab_Meyer/count_tables/danio_tomoseq_raw_counts/gene_names_translator.csv", sep = ",", header=T, stringsAsFactors = F)
+add.names= read.table("/your/file/path/gene_names_translator.csv", sep = ",", header=T, stringsAsFactors = F)
 #downloaded from ensemble, matching the transcriptome that we mapped to
 
 #ERCC content per section in tomo13 - checks if the internal controls are distributed evenly (few dropouts are marks of high quality)
