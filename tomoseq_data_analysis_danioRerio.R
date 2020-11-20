@@ -1,5 +1,5 @@
 # Description ####
-# How we analyzed tomoSeq data for zebrafish one-cell stage embryos (here:tomo13)
+# How we analyzed tomo-seq data for zebrafish one-cell stage embryos (sample here is called tomo13)
 
 #Versions:
 #R version 3.2.3 (2015-12-10)
@@ -22,9 +22,9 @@
 #[11] stringi_1.2.4      lazyeval_0.2.1     labeling_0.3       RColorBrewer_1.1-2 tools_3.2.3       
 #[16] stringr_1.3.1      munsell_0.5.0      colorspace_1.3-2   tibble_1.3.4      
 
-setwd("/your/file/path/danio_tomoseq_raw_counts")
+setwd("/your/file/path/tomoseq.zebrafish.rep1.csv")
 list.files()
-#The needed files for that script are count tables from the mapping script.
+#The needed files for that script are count tables from the mapping script. I put these count tables in the upon #mentioned folder.
 
 # Parameters ####
 min.transcripts = 8000
@@ -40,21 +40,10 @@ library(tsne)
 library(zoo)
 library(kohonen)
 library(gridExtra)
+require(VennDiagram)
 
 
 # Functions ####
-
-plot.gene.line <- function(gene.expression){
-  plot.title <- paste("Spatial expression of", gene.expression[1])
-  plot.data <- 
-    data.frame(Section = as.integer(sapply(colnames(gene.expression)[-1], function(x) unlist(strsplit(x, "X"))[2])),
-               Expression = t(gene.expression[-1]))
-  colnames(plot.data)[2] <- "Expression"
-  print(
-    ggplot(plot.data, aes(x = Section, y = Expression)) + geom_line() +
-      labs(title = plot.title)
-  )
-}
 
 plot.gene.name <- function(name, expression.data, exact = F){
   if(exact == T){
@@ -124,62 +113,43 @@ plot.gene <- function(name, expression.data){
     return(p)
 }
 
-plot.short <- function(name, expression.data){
-  gene.expression <- expression.data[expression.data$Gene == name, ]
-  plot.data <- 
-    data.frame(Section = as.integer(sapply(colnames(gene.expression)[-1], function(x) unlist(strsplit(x, "X"))[2])),
-               Expression = t(gene.expression[-1]))
-  colnames(plot.data)[2] <- "Expression"
-  p=ggplot(plot.data, aes(x = Section, y = Expression)) +geom_bar(stat = "identity") +
-    theme_bw() +
-    theme(text = element_text(size=6),
-          axis.ticks.x = element_blank(),
-          axis.text.x=element_blank(),
-          axis.ticks.y = element_blank(),
-          axis.text.y=element_blank())+
-    xlab("")+
-    ylab("")
-  return(p)
-}
-
 # Load data ####
-#the here mentioned files are concatenated count tables from 2 consequtative sequencing runs. The
-# libraries are from a tomo-seq experiment from one-cell stage zebrafish embyros
-
-transcripts.in.tomo13=read.table("/your/file/path/tomo13_deep.coutt.csv", sep = ",", header = T, stringsAsFactors = F)
+transcripts.in.tomo13 <- read.table("/your/file/path/tomoseq.zebrafish.rep1.transcripts.csv", sep = ",", header = T, stringsAsFactors = F)
 colnames(transcripts.in.tomo13)[-1]=paste("X", 1:96, sep = "")
-transcripts.tomo13 = transcripts.in.tomo13[!grepl("ERCC", transcripts.in.tomo13$GENEID), ]
-counts.in.tomo13 <- read.table("/your/file/path/tomo13_deep.coutc.csv", sep = "\t", header = T, stringsAsFactors = F)
-counts.tomo13 <- counts.in.tomo13[!grepl("ERCC", counts.in.tomo13$GENEID), ]
-UMIs.in.tomo13 <- read.table("/your/file/path/tomo13_deep.coutb.csv", sep = "\t", header = T, stringsAsFactors = F)
+transcripts.tomo13 <- transcripts.in.tomo13[!grepl("ERCC", transcripts.in.tomo13$GENEID), ]
+#counts.in.tomo13 <- read.table("/your/file/path/tomoseq.zebrafish.rep1.counts.csv", sep = "\t", header = T, stringsAsFactors = F)
+#counts.tomo13 <- counts.in.tomo13[!grepl("ERCC", counts.in.tomo13$GENEID), ]
+UMIs.in.tomo13 <- read.table("/your/file/path/tomoseq.zebrafish.rep1.UMIs.csv", sep = "\t", header = T, stringsAsFactors = F)
 UMIs.tomo13 <- UMIs.in.tomo13[!grepl("ERCC", UMIs.in.tomo13$GENEID), ]
-add.names= read.table("/your/file/path/gene_names_translator.csv", sep = ",", header=T, stringsAsFactors = F)
-#downloaded from ensemble, matching the transcriptome that we mapped to
 
-#ERCC content per section in tomo13 - checks if the internal controls are distributed evenly (few dropouts are marks of high quality)
-ERCC.tomo13=transcripts.in.tomo13[grep("ERCC", transcripts.in.tomo13$GENEID),]
-#colnames(ERCC.tomo13)
+add.names= read.table("/your/file/path/gene_names_translator.csv", sep = ",", header=T, stringsAsFactors = F) #that file translates GENEIDs to gene names, downloaded from ensemble, matching the transcriptome that we mapped to
+
+#table 1 contains normalized expression and SOM profile per gene for three different samples of one-cell stage zebrafish embryos:
+tomo.replicates.SOM <- read.table("/your/file/path/table1.csv", sep = ",", header = T, stringsAsFactors = F)
+
+# Basic inspection of data quality ####
+#ERCC content per section in tomo13 - checks if the internal controls are distributed evenly (only few dropouts are a mark of high quality)
 ERCC.tomo13.s=colSums(ERCC.tomo13[,-1])
+#this produces the plot in Figure S1c:
 plot(ERCC.tomo13.s, type="h",
      xlab="Section number", ylab="ERCC reads",
      main="ERCC reads in tomo13")
 
 # Sequencing statistics tomo13####
-
 #the number of reads per UMI are a measure of how deeply a library is sequenced - desirable would be that every UMI has been seen multiple times
-overseq(counts.tomo13[, -1], UMIs.tomo13[, -1], "tomo-seq")
-
+#reproduces plot in Fig. 1d
 df_overseq <- data.frame("gene" = counts.tomo13$GENEID,
                          "reads" = rowSums(counts.tomo13[,-1]),
                          "UMI" = rowSums(UMIs.tomo13[,-1]))
 
-#function for UMI saturation (Grün et al 2014):
+#function for UMI saturation (Gruen et al., 2014):
 #while 4^6*96 is the maximum amount of UMIS that we could potentially recover, with 6 bp random
 #barcode, multiplied with 96 sections
 UMI.saturation <- function(x) {
   (1- exp(-x/(4^6*96)))*4^6*96
 }
 
+#this code produces the plot in Figure 1d
 ggplot(data = df_overseq) +
   theme_light() +
   scale_x_log10(limits = c(1, 10^8)) +
@@ -194,7 +164,7 @@ bc.stats.tomo13 <- data.frame(Section = factor(c(1:96)),
                        Genes = apply(transcripts.tomo13[, -1], 2, function(x) sum(x > 0)),
                        ERCC=ERCC.tomo13.s)
 
-#visualizes the distribution of transcript- and read recovery per section
+#visualizes the distribution of transcript- and read recovery per section as shown in Figure 1b
 ggplot(bc.stats.tomo13) + 
   theme_bw() +
   geom_line(aes(x = Section, y = Transcripts, group=1)) +
@@ -234,16 +204,12 @@ ggplot(bc.stats.2.tomo13, aes(x = Section, y = Transcripts)) +
 ggplot(bc.stats.2.tomo13, aes(x = Section, y = Genes, group=1)) + geom_line() +
   scale_y_log10() + 
   theme(axis.text.x = element_text(angle = 45)) +
-  labs(title = "Genes in sections with more than 1000 transcripts in tomo13")
-#ggsave("genes_per_f_section_tomo13.cut1000.pdf", width = 8, height = 5, unit="in")
+  labs(title = "Genes in sections with more than 8000 transcripts in tomo13")
 
-gene.trans.tomo13 = merge(add.names, transcripts.tomo13) #that converts GENEIDs into gene names
-gene.trans.2.tomo13 = gene.trans.tomo13[ ,-1]
+gene.trans.tomo13 <- merge(add.names, transcripts.tomo13) #that converts GENEIDs into gene names
+gene.trans.2.tomo13 <- gene.trans.tomo13[ ,-1]
 
 length(unique(gene.trans.2.tomo13$Gene))
-#16879
-#write.csv(gene.trans.3.tomo13, "tomo13_wo_filtering.csv",
- #         quote = F, row.names = F)
 
 ###Normalisation of data
 # Filter for good sections, filter out lowly expressed genes and normalize expression to reads per sections for tomo13####
@@ -260,30 +226,22 @@ median.tomo13 <- median(colSums(transcripts.ffs.n.tomo13[, -1]))
 transcripts.ffs.n.tomo13[, -1] <- median.tomo13 * t(t(transcripts.ffs.n.tomo13[, -1])/colSums(transcripts.ffs.n.tomo13[, -1]))
 
 colSums(transcripts.ffs.n.tomo13[,-1]) # -> constant
-#write.csv(transcripts.ffs.n.tomo13, "tomo13_norm2section_transcripts.csv",
-#          quote = F, row.names = F)
 
 # Checking known localized mRNAs ####
-#animally distributed
-plot.gene.name("pou2f1b", transcripts.ffs.n.tomo13)
-plot.gene.name("bmp1a", transcripts.ffs.n.tomo13)
-plot.gene.name("pabpn1l", transcripts.ffs.n.tomo13)
-plot.gene.name("sox19", transcripts.ffs.n.tomo13)
-plot.gene.name("CKAP2", transcripts.ffs.n.tomo13)
-plot.gene.name("cth1", transcripts.ffs.n.tomo13)
+#animally localized
 plot.gene.name("exd2", transcripts.ffs.n.tomo13)
-plot.gene.name("nkap", transcripts.ffs.n.tomo13)
-#ggsave("tomo13.nkap.pdf", dpi=300, width=7, height = 5, units = "in")
+#ggsave("tomo13.exd2.pdf", dpi=300, width=7, height = 5, units = "in")
 
-#vegetally located genes
-plot.gene.name("dazl", transcripts.ffs.n.tomo13)
-plot.gene.name("dazl", gene.trans.2.tomo13)
-plot.gene.name("celf1", transcripts.ffs.n.tomo13)
-plot.gene.name("wnt8a", transcripts.ffs.n.tomo13)
-plot.gene.name("grip2a", transcripts.ffs.n.tomo13)
+#vegetally located genes, this chunks produces plots as shown in figure 1c:
+plot.gene("dazl", transcripts.ffs.n.tomo13)
+plot.gene("dazl", gene.trans.2.tomo13)
+plot.gene("celf1", transcripts.ffs.n.tomo13)
+plot.gene("trim36", transcripts.ffs.n.tomo13)
+plot.gene("wnt8a", transcripts.ffs.n.tomo13)
+plot.gene("grip2a", transcripts.ffs.n.tomo13)
 
-# Z-Score transition ####
-transcripts.z.tomo13 = transcripts.ffs.n.tomo13
+# Z-Score transition of normalized counts####
+transcripts.z.tomo13 <- transcripts.ffs.n.tomo13
 transcripts.z.tomo13[, -1] <- t(scale(t(transcripts.ffs.n.tomo13[, -1])))
 
 plot.gene.name("vasa", transcripts.ffs.n.tomo13)
@@ -295,7 +253,7 @@ plot.gene.name("dazl", transcripts.z.tomo13)
 plot.gene.name("grip2a", transcripts.z.tomo13)
 #ggsave("tomo13.grip2a.z.pdf", dpi=300, width=7, height = 5, units = "in")
 
-#Self-organizing maps for clustering of the genes, Bastiaan Spanjaard####
+#Self-organizing maps for clustering of the genes, coded by Bastiaan Spanjaard####
 # Calculate the cumulative expression for all genes, normalized to the maximum expression. Then cluster genes with SOM.
 #colnames(transcripts.ffs.n.tomo13)=c("Gene", paste("X", 1:69, sep = "."))
 transcripts.tomo13.cum <- plyr::adply(transcripts.ffs.n.tomo13, 1, 
@@ -309,7 +267,7 @@ plot.gene.name("dazl", transcripts.tomo13.cum)
 plot.gene.name("bmp1a", transcripts.tomo13.cum)
 plot.gene.name("fanci", transcripts.tomo13.cum)
 #ggsave("tomo13.bmp1a.cum.pdf", dpi=300, width=7, height = 5, units = "in")
-
+#reproduces plots in supplemental Fig. 2b
 
 # SOM of cumulative expression ####
 # Calculate and plot the Self-Organizing Map in a 25x16-grid.
@@ -317,7 +275,6 @@ tomo13.som.grid <-
   supersom(data = as.matrix(transcripts.tomo13.cum[, -1]), grid = somgrid(25, 16, "rectangular"))
 
 plot(tomo13.som.grid, "codes")
-#ggsave("tomo13_gene_profiles_som.png", dpi=300, width=16, height = 9, units = "in")
 
 tomo13.som.grid <-
   supersom(data = as.matrix(transcripts.tomo13.cum[, -1]), grid = somgrid(50, 1, "rectangular"))
@@ -330,8 +287,9 @@ tomo13.codes.melt <- melt(tomo13.som$codes,
                           value.name = "Cum.expression")
 tomo13.codes.melt$Section <- factor(tomo13.codes.melt$Section,
                                     levels = paste("X", 1:96, sep = ""))
-tomo13.codes.melt$Section.num = as.integer(sub("X", "", tomo13.codes.melt$Section))
+tomo13.codes.melt$Section.num <- as.integer(sub("X", "", tomo13.codes.melt$Section))
 
+#the following code chuck reproduces the plot in supplemental Figure 2c:
 ggplot(tomo13.codes.melt) +
   geom_tile(aes(x = Section, y = Profile, fill = Cum.expression)) +
   scale_fill_gradient2(low = "blue", high = "red", mid = "yellow", midpoint = 0.5) +
@@ -394,6 +352,8 @@ tomo13.z.SOM.melt$Gene =
          levels = tomo13.z.SOM.melt$Gene[order(-tomo13.z.SOM.melt$Profile)])
 
 require(scales)
+
+#this code chuck reproduces the plot in Figure 2a:
 ggplot(tomo13.z.SOM.melt)+
   geom_tile(aes(x = Section, y = Gene, fill = Z.score), show.legend=NA) +
     #scale_fill_gradient2(low = "steelblue4", high = "darkorange2", mid = "white") +
@@ -408,52 +368,96 @@ ggplot(tomo13.z.SOM.melt)+
   labs(title="Transcript localization in a one cell stage embryo")
 #ggsave("tomo13.SOM50.heatmap.orange.blue.png", width = 3.5, height = 2, unit="in")
 
-#For visualization, plot a high number of genes from the SOM list ####
-#Plot the localization of the highest ranked vegetally localised 50 genes from the SOM list
-p1=plot.short("celf1", transcripts.ffs.n.tomo13)
-p2=plot.short("slc38a7", transcripts.ffs.n.tomo13)
-p3=plot.short("dazl", transcripts.ffs.n.tomo13)
-p4=plot.short("fgd6", transcripts.ffs.n.tomo13)
-p5=plot.short("shcbp1", transcripts.ffs.n.tomo13)
-p6=plot.short("sybu", transcripts.ffs.n.tomo13)
-p7=plot.short("trim36", transcripts.ffs.n.tomo13)
-p8=plot.short("cdk6", transcripts.ffs.n.tomo13)
-p9=plot.short("camk2g1", transcripts.ffs.n.tomo13)
-p10=plot.short("grip2a", transcripts.ffs.n.tomo13)
-p12=plot.short("tpd52l2b", transcripts.ffs.n.tomo13)
-p13=plot.short("sh2d5", transcripts.ffs.n.tomo13)
-p14=plot.short("myl12.1", transcripts.ffs.n.tomo13)
-p15=plot.short("hmmr", transcripts.ffs.n.tomo13)
-p16=plot.short("clic4", transcripts.ffs.n.tomo13)
-p17=plot.short("lmbr1", transcripts.ffs.n.tomo13)
-p18=plot.short("UBL7", transcripts.ffs.n.tomo13)
-p19=plot.short("fbxw11a", transcripts.ffs.n.tomo13)
-p20=plot.short("lef1", transcripts.ffs.n.tomo13)
-p21=plot.short("ndel1b", transcripts.ffs.n.tomo13)
-p22=plot.short("sulf1", transcripts.ffs.n.tomo13)
-p23=plot.short("GIT1", transcripts.ffs.n.tomo13)
-p24=plot.short("gnav1", transcripts.ffs.n.tomo13)
-p25=plot.short("KIF2A_$9297", transcripts.ffs.n.tomo13)
-p26=plot.short("ptprga", transcripts.ffs.n.tomo13)
-p27=plot.short("ca7", transcripts.ffs.n.tomo13)
-p28=plot.short("pawr", transcripts.ffs.n.tomo13)
-p29=plot.short("wnt8a_$10565", transcripts.ffs.n.tomo13)
-p30=plot.short("CCDC88C", transcripts.ffs.n.tomo13)
-p31=plot.short("slc7a6", transcripts.ffs.n.tomo13)
-p32=plot.short("rftn2", transcripts.ffs.n.tomo13)
-p33=plot.short("rab3aa", transcripts.ffs.n.tomo13)
-p34=plot.short("mpzl1l", transcripts.ffs.n.tomo13)
-p35=plot.short("vrtn", transcripts.ffs.n.tomo13)
-p36=plot.short("ctdsplb", transcripts.fs.n.tomo13)
-p37=plot.short("ino80db", transcripts.ffs.n.tomo13)
-p38=plot.short("golga3", transcripts.ffs.n.tomo13)
-p39=plot.short("zgc:158856", transcripts.ffs.n.tomo13)
-p40=plot.short("fndc3ba", transcripts.ffs.n.tomo13)
-p41=plot.short("ralbp1", transcripts.ffs.n.tomo13)
-p42=plot.short("CU467832.1", transcripts.ffs.n.tomo13)
-p43=plot.short("HOOK2", transcripts.ffs.n.tomo13)
-p44=plot.short("si:dkey-121h17.7", transcripts.ffs.n.tomo13)
+#compares the gene recovery between different tomo-seq datasets:
+detected.genes.tomo17 <- data.frame("Genes"=transcripts.tomo17[,1],
+                                 "rep2"=rowSums(transcripts.tomo17[,-1]))
 
-grid.arrange(p1, p2, p3, p4,p5,p6,p7,p8,p9,p10,p12,p13,p14,p15,p16,p17,p18,p19,p20,p21,p22,p23,p24,
-             p25,p26,p27,p28,p29,p30,p31,p32,p33,p34,p35,p36, ncol=7, nrow =5)
-#ggsave("tomo13_SOM35_distr.bw.2.pdf", width=9, height=6, unit="in")
+detected.genes.tomo13 <- data.frame("Genes"=transcripts.tomo13[,1],
+                                 "rep1"=rowSums(transcripts.tomo13[,-1]))
+
+#build a dataframe for all your replicates:
+expr <- merge(detected.genes.tomo17, detected.genes.tomo13, by="Genes", all = T)
+
+length(unique(expr$Genes))
+
+sum(is.na(expr))
+expr[is.na(expr)]=0.1 #set the NA values to a very small, arbitrary value -> find these values back at the axes, respectively
+#normalize to sequencing depth
+s <- as.numeric(colSums(expr[,c(2,3)]))
+expr$rep2.norm <- expr$Tomo17/s[1]*10^6
+expr$rep1.norm <- expr$Tomo13/s[2]*10^6
+colSums(expr[,-1])
+
+#calculate expression correlation
+cor(expr$rep1.norm, expr$rep2.norm, method= "pearson")
+#pearson= 0.993989
+
+#this piece of code produces the figure 1e:
+ggplot(data=expr,aes(x=rep2.norm, y=rep1.norm))+
+  geom_point() +
+  theme_bw() +
+  scale_y_log10() + scale_x_log10() +
+  annotate("text", label="pearsons R = 0.99", x=30, y=100000)+
+  labs(title="Correlation of tomo-seq replicates")+
+  #geom_text(aes(label=Genes), hjust="left", size= 3, check_overlap = T) +
+  geom_smooth(method="lm", colour="darkorange")+
+  xlab("replicate 2")+ ylab("replicate 1")
+
+# Generate a list of vegetally localized genes  in three replicate samples:
+high.conf=tomo.replicates.SOM[tomo.replicates.SOM$SOM.rep1>47&(tomo.replicates.SOM$SOM.rep2>45&tomo.replicates.SOM$SOM.rep2>45)|tomo.replicates.SOM$SOM.rep3>47&(tomo.replicates.SOM$SOM.rep1>45&tomo.replicates.SOM$SOM.rep2>45)|tomo.replicates.SOM$SOM.rep2>47&(tomo.replicates.SOM$SOM.rep1>45&tomo.replicates.SOM$SOM.rep3>45),]
+high.conf=high.conf[order(high.conf$SOM.rep1, high.conf$SOM.rep3, high.conf$SOM.rep2,decreasing = T),]
+#this results in a list of 97 confidentially vegetally localizing genes, find it as "vegetal.genes.dR.csv" in the tomo-seq repository on github
+
+#Venn diagram for vegetally localized genes between replicates
+#this pieces produces the plot in Figure 2b:
+grid.newpage()
+draw.triple.venn(area1 = length(unique(tomo.replicates.SOM$gene[tomo.replicates.SOM$SOM.rep3>47])),
+                 area2 = length(unique(tomo.replicates.SOM$gene[tomo.replicates.SOM$SOM.rep1>47])),
+                 area3 = length(unique(tomo.replicates.SOM$gene[tomo.replicates.SOM$SOM.rep2>47])),
+                 n12 = 84, n23 = 71, n13 = 83, n123 = length(high.conf.consistent$Gene), category = c("rep3", "rep1", "rep2"), lty = "blank",
+                 fill = c("turquoise", "yellow", "orange"))
+
+#the following code generates the plot in 2c, correlating gene expression of genes in profiles 46 and higher (vegetally localized genes):
+tomo.replicates.SOM[is.na(tomo.replicates.SOM)] = 0.1
+
+cor.plot <-
+  ggplot()+
+  theme_bw() + 
+  geom_point(data = tomo.replicates.SOM[tomo.replicates.SOM$SOM.rep2>45 | tomo.replicates.SOM$SOM.rep3 > 45,],
+             aes(x= expr.rep2, y=expr.rep3),
+             alpha = 0.5, size = 2) +
+  scale_x_log10() + scale_y_log10() 
+
+xplot <- ggplot()+
+  theme_classic() +
+  geom_density(data = tomo.replicates.SOM[tomo.replicates.SOM$SOM.rep2>45 | tomo.replicates.SOM$SOM.rep3 > 45,], 
+               aes(expr.rep2), fill='lightgrey') + scale_x_log10() +
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank())
+yplot <- ggplot() +
+  theme_classic() +
+  geom_density(data = tomo.replicates.SOM[tomo.replicates.SOM$SOM.rep2>45 | tomo.replicates.SOM$SOM.rep3 > 45,], 
+               aes(expr.rep3), fill = "lightgrey")+ scale_x_log10() + 
+  theme(axis.title.y =element_blank(), axis.text.y=element_blank(), axis.ticks.y=element_blank()) +
+  coord_flip()
+
+#instead of ggarrange, use grid.arrange to align the marginal density plots. For that, create 
+#a blank plot as a spaceholder
+
+blankPlot <- ggplot()+geom_blank(aes(1,1))+
+  theme(
+    plot.background = element_blank(), 
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(), 
+    panel.border = element_blank(),
+    panel.background = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_blank(), 
+    axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_blank()
+  )
+
+grid.arrange(xplot, blankPlot, cor.plot, yplot, 
+             ncol = 2, nrow = 2, 
+             widths = c(2, 0.5), heights = c(0.5, 2))
