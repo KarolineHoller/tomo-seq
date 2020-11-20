@@ -114,7 +114,8 @@ plot.gene <- function(name, expression.data){
 }
 
 # Load data ####
-transcripts.in.tomo13 <- read.table("/your/file/path/tomoseq.zebrafish.rep1.transcripts.csv", sep = ",", header = T, stringsAsFactors = F)
+#in the accompanying GEO submission, find csv files with transcript counts of three tomo-seq samples of zebrafish embryos
+transcripts.in.tomo13 <- read.table("/your/file/path/tomoseq.zebrafish.rep1.csv", sep = ",", header = T, stringsAsFactors = F)
 colnames(transcripts.in.tomo13)[-1]=paste("X", 1:96, sep = "")
 transcripts.tomo13 <- transcripts.in.tomo13[!grepl("ERCC", transcripts.in.tomo13$GENEID), ]
 #counts.in.tomo13 <- read.table("/your/file/path/tomoseq.zebrafish.rep1.counts.csv", sep = "\t", header = T, stringsAsFactors = F)
